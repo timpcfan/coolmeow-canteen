@@ -1,4 +1,5 @@
 import type { GanttTask, MealType, PlannedMeal, PreferenceRow, RecipeFull, ShoppingGap, ToolRow } from "./types";
+import { DEFAULT_MAX_MEAL_DURATION_MIN, validateGanttExecutability } from "./gantt-feasibility.ts";
 
 export type MealTuneObjective = "balanced" | "faster" | "budget" | "low_cal";
 
@@ -373,6 +374,43 @@ export function scheduleMeal(selected: RecipeFull[], toolCapacityMap: Map<string
   return tasks.sort((a, b) => a.startMin - b.startMin);
 }
 
+function scheduleMealSequentialFallback(selected: RecipeFull[]): GanttTask[] {
+  const toolLaneMap = new Map<string, number>();
+  let laneSeed = 1;
+  let cursor = 0;
+  const tasks: GanttTask[] = [];
+
+  for (const recipe of selected) {
+    const steps = [...recipe.steps].sort((a, b) => a.stepOrder - b.stepOrder);
+    for (const step of steps) {
+      const startMin = cursor;
+      const endMin = startMin + step.durationMin;
+      cursor = endMin;
+
+      let lane = 0;
+      if (step.toolType) {
+        if (!toolLaneMap.has(step.toolType)) {
+          toolLaneMap.set(step.toolType, laneSeed++);
+        }
+        lane = toolLaneMap.get(step.toolType) as number;
+      }
+
+      tasks.push({
+        taskId: `${recipe.id}-${step.id}`,
+        label: step.title,
+        recipeId: recipe.id,
+        recipeName: recipe.name,
+        toolType: step.toolType,
+        lane,
+        startMin,
+        endMin,
+      });
+    }
+  }
+
+  return tasks;
+}
+
 export type SingleMealInput = {
   date: string;
   mealType: MealType;
@@ -478,7 +516,19 @@ export function generateSingleMeal(input: SingleMealInput): {
     }
   }
 
-  const gantt = scheduleMeal(selectedRecipes, toolCapacityMap);
+  let gantt = scheduleMeal(selectedRecipes, toolCapacityMap);
+  const feasibility = validateGanttExecutability(gantt, {
+    maxDurationMin: DEFAULT_MAX_MEAL_DURATION_MIN,
+  });
+  if (!feasibility.isExecutable) {
+    gantt = scheduleMealSequentialFallback(selectedRecipes);
+    const fallbackFeasibility = validateGanttExecutability(gantt, {
+      maxDurationMin: DEFAULT_MAX_MEAL_DURATION_MIN,
+    });
+    if (!fallbackFeasibility.isExecutable) {
+      throw new Error(`餐次步骤排程不可执行: ${fallbackFeasibility.issues.map((item) => item.code).join(",")}`);
+    }
+  }
 
   for (const recipe of selectedRecipes) {
     usageCount.set(recipe.id, (usageCount.get(recipe.id) ?? 0) + 1);
@@ -599,6 +649,7 @@ export const plannerInternals = {
   filterCandidates,
   scoreRecipe,
   scheduleMeal,
+  validateGanttExecutability,
   computeShoppingGaps,
   generateSingleMeal,
   toToolCapacityMap,

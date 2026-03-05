@@ -114,6 +114,13 @@ export const mealPlans = sqliteTable("meal_plans", {
   createdAt: text("created_at").notNull(),
 });
 
+export const appState = sqliteTable("app_state", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  notes: text("notes").notNull().default(""),
+});
+
 export const recipeRelations = relations(recipes, ({ many }) => ({
   ingredients: many(recipeIngredients),
   steps: many(recipeSteps),

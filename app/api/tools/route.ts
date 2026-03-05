@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { createTool, listTools } from "@/lib/repository";
+import { createTool, listTools, setPlanConfigSource } from "@/lib/repository";
 
 const toolSchema = z.object({
   name: z.string().min(1),
@@ -33,8 +33,9 @@ export async function POST(req: NextRequest) {
       ...parsed,
       notes: parsed.notes ?? "",
     });
+    const configSource = await setPlanConfigSource("manual", "工具配置手动修改");
 
-    return NextResponse.json({ item }, { status: 201 });
+    return NextResponse.json({ item, configSource }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
       {

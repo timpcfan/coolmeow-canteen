@@ -1,11 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { GanttChart } from "@/components/gantt-chart";
 import { buildMealCountdownSchedule } from "@/lib/countdown";
 import { apiUrl } from "@/lib/client-api";
+import {
+  CONFIG_SOURCE_LABELS,
+  getConfigSource as getStoredConfigSource,
+  setConfigSource as setStoredConfigSource,
+  type ConfigSource,
+} from "@/lib/config-source-client";
 import { getOnboardingStatus, setOnboardingStatus } from "@/lib/onboarding-client";
 
 type Meal = {
@@ -43,6 +49,11 @@ type WeekResponse = {
   endDate: string;
   meals: Meal[];
   shoppingGaps: ShoppingItem[];
+  configSource?: {
+    source: ConfigSource;
+    updatedAt: string;
+    notes: string;
+  };
 };
 
 type QuickTuneObjective = "balanced" | "faster" | "budget" | "low_cal";
@@ -72,6 +83,20 @@ function today(): string {
 
 function mealOptionLabel(meal: Meal): string {
   return `${meal.date} ${meal.mealLabel}`;
+}
+
+function formatSourceTime(input: string): string {
+  const value = new Date(input);
+  if (Number.isNaN(value.getTime())) {
+    return "--";
+  }
+  return value.toLocaleString("zh-CN", {
+    hour12: false,
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function OnboardingDialog(props: {
@@ -219,7 +244,7 @@ function OnboardingDialog(props: {
   );
 }
 
-export default function WeekPlanPage() {
+function WeekPlanContent() {
   const searchParams = useSearchParams();
   const [startDate, setStartDate] = useState(today());
   const [data, setData] = useState<WeekResponse | null>(null);
@@ -227,6 +252,12 @@ export default function WeekPlanPage() {
   const [error, setError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   const [activeAction, setActiveAction] = useState<{ mealId: number; objective: QuickTuneObjective } | null>(null);
+  const [fallbackMealId, setFallbackMealId] = useState<number | null>(null);
+  const [configSource, setConfigSourceState] = useState<{ source: ConfigSource; updatedAt: string; notes: string }>({
+    source: "manual",
+    updatedAt: new Date().toISOString(),
+    notes: "",
+  });
 
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingSaving, setOnboardingSaving] = useState(false);
@@ -252,6 +283,25 @@ export default function WeekPlanPage() {
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [data]);
 
+  const markConfigSource = (source: ConfigSource, updatedAt?: string, notes = "") => {
+    setConfigSourceState({
+      source,
+      updatedAt: updatedAt ?? new Date().toISOString(),
+      notes,
+    });
+    setStoredConfigSource(source);
+  };
+
+  const syncConfigSourceFromPayload = (payload: WeekResponse | { configSource?: WeekResponse["configSource"] } | undefined) => {
+    const config = payload?.configSource;
+    const source = config?.source;
+    if (source === "onboarding" || source === "quick_tune" || source === "manual") {
+      markConfigSource(source, config?.updatedAt, config?.notes ?? "");
+      return;
+    }
+    markConfigSource(getStoredConfigSource());
+  };
+
   const fetchWeek = async (forceGenerate = false) => {
     setLoading(true);
     setError(null);
@@ -266,6 +316,7 @@ export default function WeekPlanPage() {
         throw new Error(payload.error ?? "请求失败");
       }
       setData(payload);
+      syncConfigSourceFromPayload(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "获取周计划失败");
     } finally {
@@ -276,6 +327,15 @@ export default function WeekPlanPage() {
   useEffect(() => {
     void fetchWeek(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const source = getStoredConfigSource();
+    setConfigSourceState({
+      source,
+      updatedAt: new Date().toISOString(),
+      notes: "",
+    });
   }, []);
 
   useEffect(() => {
@@ -307,33 +367,70 @@ export default function WeekPlanPage() {
     return () => window.clearInterval(timer);
   }, [countdownEnabled]);
 
+  const replaceMealByObjective = async (
+    mealId: number,
+    objective: QuickTuneObjective,
+    fallbackReason?: "step_failed_or_timeout",
+  ): Promise<{ meal: Meal; configSource?: WeekResponse["configSource"] }> => {
+    const res = await fetch(apiUrl(`/api/weekly-plan/${mealId}/replace`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        objective,
+        fallbackReason,
+      }),
+    });
+    const payload = (await res.json()) as {
+      meal?: Meal;
+      configSource?: WeekResponse["configSource"];
+      error?: string;
+    };
+    if (!res.ok || !payload.meal) {
+      throw new Error(payload.error ?? "替换失败");
+    }
+    return {
+      meal: payload.meal,
+      configSource: payload.configSource,
+    };
+  };
+
+  const applyMealReplacement = (mealId: number, meal: Meal) => {
+    setData((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      return {
+        ...prev,
+        meals: prev.meals.map((item) => (item.id === mealId ? meal : item)),
+      };
+    });
+  };
+
   const runQuickTune = async (mealId: number, objective: QuickTuneObjective) => {
     setActiveAction({ mealId, objective });
     setError(null);
     try {
-      const res = await fetch(apiUrl(`/api/weekly-plan/${mealId}/replace`), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ objective }),
-      });
-      const payload = (await res.json()) as { meal?: Meal; error?: string };
-      if (!res.ok || !payload.meal) {
-        throw new Error(payload.error ?? "替换失败");
-      }
-
-      setData((prev) => {
-        if (!prev) {
-          return prev;
-        }
-        return {
-          ...prev,
-          meals: prev.meals.map((meal) => (meal.id === mealId ? payload.meal! : meal)),
-        };
-      });
+      const result = await replaceMealByObjective(mealId, objective);
+      applyMealReplacement(mealId, result.meal);
+      syncConfigSourceFromPayload(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "替换失败");
     } finally {
       setActiveAction(null);
+    }
+  };
+
+  const runFallbackReplan = async (mealId: number) => {
+    setFallbackMealId(mealId);
+    setError(null);
+    try {
+      const result = await replaceMealByObjective(mealId, "faster", "step_failed_or_timeout");
+      applyMealReplacement(mealId, result.meal);
+      syncConfigSourceFromPayload(result);
+    } catch (err) {
+      setError(err instanceof Error ? `兜底重排失败：${err.message}` : "兜底重排失败");
+    } finally {
+      setFallbackMealId(null);
     }
   };
 
@@ -362,6 +459,7 @@ export default function WeekPlanPage() {
       setStartDate(payload.startDate);
       setOnboardingStatus("completed");
       setOnboardingOpen(false);
+      syncConfigSourceFromPayload(payload);
     } catch (err) {
       setOnboardingError(err instanceof Error ? err.message : "引导保存失败");
     } finally {
@@ -392,6 +490,13 @@ export default function WeekPlanPage() {
       now: new Date(clockTick),
     });
   }, [clockTick, countdownEnabled, countdownMeal, countdownTime]);
+
+  const countdownOverdue = useMemo(() => {
+    if (!countdownEnabled || !countdownSchedule) {
+      return false;
+    }
+    return clockTick > new Date(countdownSchedule.serveAt).getTime();
+  }, [countdownEnabled, countdownSchedule, clockTick]);
 
   return (
     <div className="space-y-5">
@@ -434,6 +539,9 @@ export default function WeekPlanPage() {
             刷新
           </button>
           {loading && <span className="text-sm text-primary/70">加载中...</span>}
+          <span className="rounded-full border border-accent/30 bg-[#fff6ec] px-3 py-1 text-xs text-primary/80">
+            当前生效配置来源：{CONFIG_SOURCE_LABELS[configSource.source]}（{formatSourceTime(configSource.updatedAt)}）
+          </span>
         </div>
         {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       </section>
@@ -476,7 +584,16 @@ export default function WeekPlanPage() {
             >
               关闭倒计时
             </button>
+            <button
+              onClick={() => countdownMealId && void runFallbackReplan(countdownMealId)}
+              className="rounded-md border border-accent/40 bg-[#fff8ed] px-3 py-2 text-sm text-accent hover:bg-[#fff1dd]"
+              disabled={countdownMealId === null || fallbackMealId !== null || activeAction !== null}
+            >
+              步骤失败/超时，一键重排
+            </button>
           </div>
+
+          {fallbackMealId !== null && <p className="mt-2 text-sm text-primary/70">正在执行兜底重排...</p>}
 
           {countdownEnabled && countdownSchedule && (
             <p className="mt-2 text-sm text-primary/80">
@@ -485,6 +602,16 @@ export default function WeekPlanPage() {
                 ? ` 下一批步骤将在 ${countdownSchedule.startsInMin} 分钟后开始。`
                 : " 当前有步骤应立即开始（甘特图已高亮）。"}
             </p>
+          )}
+
+          {countdownEnabled && countdownSchedule && !countdownSchedule.feasibility.isExecutable && (
+            <p className="mt-2 text-sm text-red-600">
+              倒排可执行性告警：{countdownSchedule.feasibility.issues.map((item) => item.message).join("；")}
+            </p>
+          )}
+
+          {countdownEnabled && countdownSchedule && countdownOverdue && (
+            <p className="mt-2 text-sm text-red-600">当前餐已超出目标开饭时间，建议立即执行一键重排兜底。</p>
           )}
 
           {countdownEnabled && !countdownSchedule && (
@@ -508,7 +635,9 @@ export default function WeekPlanPage() {
                 <div className="mb-3 text-sm font-semibold text-primary">{date}</div>
                 <div className="grid gap-3 md:grid-cols-3">
                   {meals.map((meal) => {
-                    const isLoading = activeAction?.mealId === meal.id;
+                    const isTuning = activeAction?.mealId === meal.id;
+                    const isFallbacking = fallbackMealId === meal.id;
+                    const isLoading = isTuning || isFallbacking;
                     const hasCountdown = countdownEnabled && countdownSchedule && countdownMealId === meal.id;
                     const focusTaskIds = hasCountdown
                       ? countdownSchedule.tasks.filter((task) => task.shouldStartNow).map((task) => task.taskId)
@@ -570,7 +699,8 @@ export default function WeekPlanPage() {
                             手动替换
                           </button>
                         </div>
-                        {isLoading && <p className="mt-2 text-xs text-primary/70">正在替换...</p>}
+                        {isTuning && <p className="mt-2 text-xs text-primary/70">正在替换...</p>}
+                        {isFallbacking && <p className="mt-2 text-xs text-primary/70">正在兜底重排...</p>}
 
                         <div className="mt-3 flex items-center gap-3 text-xs">
                           <button
@@ -643,5 +773,13 @@ export default function WeekPlanPage() {
         </section>
       )}
     </div>
+  );
+}
+
+export default function WeekPlanPage() {
+  return (
+    <Suspense fallback={<div className="rounded-xl border border-primary/20 bg-white p-4 text-primary/70">周计划加载中...</div>}>
+      <WeekPlanContent />
+    </Suspense>
   );
 }

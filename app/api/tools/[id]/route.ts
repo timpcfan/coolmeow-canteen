@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { deleteTool, updateTool } from "@/lib/repository";
+import { deleteTool, setPlanConfigSource, updateTool } from "@/lib/repository";
 
 const toolUpdateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -26,7 +26,8 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
       return NextResponse.json({ error: "工具不存在" }, { status: 404 });
     }
 
-    return NextResponse.json({ item });
+    const configSource = await setPlanConfigSource("manual", "工具配置手动修改");
+    return NextResponse.json({ item, configSource });
   } catch (error) {
     return NextResponse.json(
       {
@@ -50,7 +51,8 @@ export async function DELETE(_req: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: "工具不存在" }, { status: 404 });
     }
 
-    return NextResponse.json({ ok: true });
+    const configSource = await setPlanConfigSource("manual", "工具配置手动修改");
+    return NextResponse.json({ ok: true, configSource });
   } catch (error) {
     return NextResponse.json(
       {

@@ -1,4 +1,5 @@
 import type { GanttTask } from "@/lib/types";
+import { validateGanttExecutability } from "./gantt-feasibility.ts";
 
 export type CountdownTask = GanttTask & {
   startAt: string;
@@ -18,6 +19,10 @@ export type MealCountdownSchedule = {
   totalDurationMin: number;
   startsInMin: number;
   tasks: CountdownTask[];
+  feasibility: {
+    isExecutable: boolean;
+    issues: Array<{ code: "duration_overflow" | "tool_conflict" | "step_mutex_conflict"; message: string; taskIds: string[] }>;
+  };
 };
 
 function parseClock(input: string): number | null {
@@ -46,6 +51,13 @@ function toClockLabel(value: Date): string {
   return `${String(value.getHours()).padStart(2, "0")}:${String(value.getMinutes()).padStart(2, "0")}`;
 }
 
+function toDateKey(value: Date): string {
+  const y = value.getFullYear();
+  const m = String(value.getMonth() + 1).padStart(2, "0");
+  const d = String(value.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 export function buildMealCountdownSchedule(params: {
   mealDate: string;
   targetServeTime: string;
@@ -57,6 +69,7 @@ export function buildMealCountdownSchedule(params: {
     return null;
   }
 
+  const baseFeasibility = validateGanttExecutability(tasks);
   const minutesOfDay = parseClock(targetServeTime);
   if (minutesOfDay === null) {
     return null;
@@ -66,6 +79,14 @@ export function buildMealCountdownSchedule(params: {
   const serveAt = withMinutes(mealDate, minutesOfDay);
   const mealStartAt = new Date(serveAt.getTime() - totalDurationMin * 60 * 1000);
   const nowMs = now.getTime();
+  const issues = [...baseFeasibility.issues];
+  if (toDateKey(mealStartAt) < mealDate) {
+    issues.push({
+      code: "duration_overflow",
+      message: "目标开饭时间不足以覆盖当前总时长，请改晚开饭时间或重排",
+      taskIds: [],
+    });
+  }
 
   const scheduled = tasks
     .map((task) => {
@@ -135,5 +156,9 @@ export function buildMealCountdownSchedule(params: {
     totalDurationMin,
     startsInMin,
     tasks: outputTasks,
+    feasibility: {
+      isExecutable: issues.length === 0,
+      issues,
+    },
   };
 }

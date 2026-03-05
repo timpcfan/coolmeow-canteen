@@ -210,6 +210,50 @@ describe("planner internals", () => {
     assert.ok(!result.plannedMeal.dishRecipeIds.includes(23));
   });
 
+  test("gantt feasibility validator catches duration overflow and conflicts", () => {
+    const report = plannerInternals.validateGanttExecutability(
+      [
+        {
+          taskId: "r1-s1",
+          label: "step-1",
+          recipeId: 1,
+          recipeName: "A",
+          toolType: "gas_stove",
+          lane: 1,
+          startMin: 0,
+          endMin: 20,
+        },
+        {
+          taskId: "r2-s1",
+          label: "step-2",
+          recipeId: 2,
+          recipeName: "B",
+          toolType: "gas_stove",
+          lane: 1,
+          startMin: 10,
+          endMin: 35,
+        },
+        {
+          taskId: "r1-s2",
+          label: "step-3",
+          recipeId: 1,
+          recipeName: "A",
+          toolType: "steamer",
+          lane: 2,
+          startMin: 15,
+          endMin: 40,
+        },
+      ],
+      { maxDurationMin: 30 },
+    );
+
+    assert.equal(report.isExecutable, false);
+    const issueCodes = report.issues.map((item) => item.code).sort();
+    assert.ok(issueCodes.includes("duration_overflow"));
+    assert.ok(issueCodes.includes("tool_conflict"));
+    assert.ok(issueCodes.includes("step_mutex_conflict"));
+  });
+
   test("countdown schedule marks current start steps and parallel steps", () => {
     const schedule = buildMealCountdownSchedule({
       mealDate: "2026-03-05",
@@ -268,5 +312,29 @@ describe("planner internals", () => {
     const taskD = schedule?.tasks.find((task) => task.taskId === "d");
     assert.equal(taskD?.isParallelStep, true);
     assert.equal(schedule?.startsInMin, 0);
+  });
+
+  test("countdown marks reverse-duration overflow as non executable", () => {
+    const schedule = buildMealCountdownSchedule({
+      mealDate: "2026-03-05",
+      targetServeTime: "00:30",
+      now: new Date(2026, 2, 5, 0, 10, 0),
+      tasks: [
+        {
+          taskId: "long",
+          label: "long-task",
+          recipeId: 8,
+          recipeName: "L",
+          toolType: "gas_stove",
+          lane: 1,
+          startMin: 0,
+          endMin: 50,
+        },
+      ],
+    });
+
+    assert.ok(schedule);
+    assert.equal(schedule?.feasibility.isExecutable, false);
+    assert.ok(schedule?.feasibility.issues.some((item) => item.code === "duration_overflow"));
   });
 });

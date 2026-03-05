@@ -364,6 +364,7 @@ function clearTables(sqlite: Database.Database): void {
     DELETE FROM ingredients;
     DELETE FROM tools;
     DELETE FROM preferences;
+    DELETE FROM app_state;
   `);
 }
 

@@ -2,6 +2,7 @@ import { and, asc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 
 import { db } from "@/lib/db";
 import {
+  appState,
   ingredients,
   inventory,
   mealPlans,
@@ -11,7 +12,7 @@ import {
   recipes,
   tools,
 } from "@/db/schema";
-import type { MealPlanRow, PreferenceRow, RecipeFull, ToolRow } from "@/lib/types";
+import type { MealPlanRow, PlanConfigSource, PlanConfigSourceState, PreferenceRow, RecipeFull, ToolRow } from "@/lib/types";
 
 const DEFAULT_PREFERENCE_INPUT = {
   id: 1,
@@ -24,6 +25,55 @@ const DEFAULT_PREFERENCE_INPUT = {
   needSoup: true,
   stapleRequired: true,
 };
+
+const PLAN_CONFIG_SOURCE_KEY = "plan_config_source";
+
+function normalizePlanConfigSource(value: string): PlanConfigSource {
+  if (value === "onboarding" || value === "quick_tune" || value === "manual") {
+    return value;
+  }
+  return "manual";
+}
+
+export async function getPlanConfigSource(): Promise<PlanConfigSourceState> {
+  const row = await db.select().from(appState).where(eq(appState.key, PLAN_CONFIG_SOURCE_KEY)).get();
+  if (!row) {
+    return setPlanConfigSource("manual", "系统默认");
+  }
+
+  return {
+    source: normalizePlanConfigSource(row.value),
+    updatedAt: row.updatedAt,
+    notes: row.notes,
+  };
+}
+
+export async function setPlanConfigSource(source: PlanConfigSource, notes = ""): Promise<PlanConfigSourceState> {
+  const payload = {
+    key: PLAN_CONFIG_SOURCE_KEY,
+    value: source,
+    updatedAt: new Date().toISOString(),
+    notes,
+  };
+
+  await db
+    .insert(appState)
+    .values(payload)
+    .onConflictDoUpdate({
+      target: appState.key,
+      set: {
+        value: payload.value,
+        updatedAt: payload.updatedAt,
+        notes: payload.notes,
+      },
+    });
+
+  return {
+    source,
+    updatedAt: payload.updatedAt,
+    notes,
+  };
+}
 
 export async function getPreferences(): Promise<PreferenceRow> {
   const row = await db.select().from(preferences).where(eq(preferences.id, 1)).get();

@@ -39,7 +39,11 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as { startDate?: string; days?: number };
     const parsed = querySchema.parse(body);
 
-    const snapshot = await generateWeeklyPlan(parsed);
+    const snapshot = await generateWeeklyPlan({
+      ...parsed,
+      source: "manual",
+      sourceNote: "手动生成/重算一周",
+    });
     const recipes = await listRecipesFull();
 
     return NextResponse.json({

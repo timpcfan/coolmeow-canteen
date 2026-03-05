@@ -1,5 +1,6 @@
 import {
   getPreferences,
+  getPlanConfigSource,
   getMealPlanById,
   listMealPlans,
   listRecipesFull,
@@ -7,6 +8,7 @@ import {
   loadInventoryMapByIngredient,
   replaceTools,
   replaceMealPlans,
+  setPlanConfigSource,
   updatePreferences,
   updateMealPlan,
 } from "@/lib/repository";
@@ -20,10 +22,18 @@ import {
   toToolCapacityMap,
 } from "@/lib/planner-core";
 import { addDays, daysInRange, todayDate } from "@/lib/time";
-import type { MealPlanRow, PlannedMeal } from "@/lib/types";
+import type { MealPlanRow, PlanConfigSource, PlanConfigSourceState, PlannedMeal } from "@/lib/types";
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner"] as const;
 const DEFAULT_ONBOARDING_TOOL_TYPES = ["rice_cooker", "gas_stove"] as const;
+
+type WeekPlanSnapshot = {
+  startDate: string;
+  endDate: string;
+  plans: MealPlanRow[];
+  shoppingGaps: ReturnType<typeof computeShoppingGaps>;
+  configSource: PlanConfigSourceState;
+};
 
 const TOOL_PRESETS: Record<
   string,
@@ -78,7 +88,7 @@ function normalizeOnboardingTools(toolTypes: string[]): string[] {
   return [...DEFAULT_ONBOARDING_TOOL_TYPES];
 }
 
-export async function completeOnboardingSetup(params: OnboardingInput): ReturnType<typeof generateWeeklyPlan> {
+export async function completeOnboardingSetup(params: OnboardingInput): Promise<WeekPlanSnapshot> {
   const toolTypes = normalizeOnboardingTools(params.toolTypes);
 
   await updatePreferences({
@@ -97,17 +107,20 @@ export async function completeOnboardingSetup(params: OnboardingInput): ReturnTy
   return generateWeeklyPlan({
     startDate: params.startDate ?? todayDate(),
     days: params.days ?? 7,
+    source: "onboarding",
+    sourceNote: "新手引导完成后生效",
   });
 }
 
-export async function generateWeeklyPlan(params?: { startDate?: string; days?: number }): Promise<{
-  startDate: string;
-  endDate: string;
-  plans: MealPlanRow[];
-  shoppingGaps: ReturnType<typeof computeShoppingGaps>;
-}> {
+export async function generateWeeklyPlan(params?: {
+  startDate?: string;
+  days?: number;
+  source?: PlanConfigSource;
+  sourceNote?: string;
+}): Promise<WeekPlanSnapshot> {
   const startDate = params?.startDate ?? todayDate();
   const days = params?.days ?? 7;
+  const source = params?.source ?? "manual";
 
   const [preferences, tools, recipes, originalInventory] = await Promise.all([
     getPreferences(),
@@ -160,31 +173,32 @@ export async function generateWeeklyPlan(params?: { startDate?: string; days?: n
     recipes,
     inventory: originalInventory,
   });
+  const configSource = await setPlanConfigSource(source, params?.sourceNote ?? "");
 
   return {
     startDate,
     endDate,
     plans: persistedPlans,
     shoppingGaps,
+    configSource,
   };
 }
 
-export async function getWeekSnapshot(params?: { startDate?: string; days?: number }): Promise<{
-  startDate: string;
-  endDate: string;
-  plans: MealPlanRow[];
-  shoppingGaps: ReturnType<typeof computeShoppingGaps>;
-}> {
+export async function getWeekSnapshot(params?: { startDate?: string; days?: number }): Promise<WeekPlanSnapshot> {
   const startDate = params?.startDate ?? todayDate();
   const days = params?.days ?? 7;
   const endDate = addDays(startDate, days - 1);
   const plans = await listMealPlans(startDate, endDate);
 
   if (plans.length === 0) {
-    return generateWeeklyPlan({ startDate, days });
+    return generateWeeklyPlan({ startDate, days, source: "manual", sourceNote: "首次自动生成" });
   }
 
-  const [recipes, inventory] = await Promise.all([listRecipesFull(), loadInventoryMapByIngredient()]);
+  const [recipes, inventory, configSource] = await Promise.all([
+    listRecipesFull(),
+    loadInventoryMapByIngredient(),
+    getPlanConfigSource(),
+  ]);
 
   const normalizedPlans: PlannedMeal[] = plans.map((plan) => ({
     date: plan.date,
@@ -205,6 +219,7 @@ export async function getWeekSnapshot(params?: { startDate?: string; days?: numb
       recipes,
       inventory,
     }),
+    configSource,
   };
 }
 

@@ -1,4 +1,4 @@
-import type { ingredients, inventory, mealPlans, preferences, recipeIngredients, recipeSteps, recipes, tools } from "@/db/schema";
+import type { appState, ingredients, inventory, mealPlans, preferences, recipeIngredients, recipeSteps, recipes, tools } from "@/db/schema";
 
 export type MealType = "breakfast" | "lunch" | "dinner";
 
@@ -10,6 +10,15 @@ export type ToolRow = typeof tools.$inferSelect;
 export type InventoryRow = typeof inventory.$inferSelect;
 export type PreferenceRow = typeof preferences.$inferSelect;
 export type MealPlanRow = typeof mealPlans.$inferSelect;
+export type AppStateRow = typeof appState.$inferSelect;
+
+export type PlanConfigSource = "onboarding" | "quick_tune" | "manual";
+
+export type PlanConfigSourceState = {
+  source: PlanConfigSource;
+  updatedAt: string;
+  notes: string;
+};
 
 export type RecipeFull = RecipeRow & {
   ingredients: Array<RecipeIngredientRow & { ingredient: IngredientRow }>;

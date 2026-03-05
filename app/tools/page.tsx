@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiUrl } from "@/lib/client-api";
+import { setConfigSource } from "@/lib/config-source-client";
 
 type Tool = {
   id: number;
@@ -71,6 +72,7 @@ export default function ToolsPage() {
       if (!res.ok) {
         throw new Error(payload.error ?? "新增工具失败");
       }
+      setConfigSource("manual");
       setForm({ name: "", type: "steamer", capacity: 1, notes: "" });
       await refresh();
     } catch (err) {
@@ -90,6 +92,7 @@ export default function ToolsPage() {
       if (!res.ok) {
         throw new Error(payload.error ?? "更新失败");
       }
+      setConfigSource("manual");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "更新失败");
@@ -104,6 +107,7 @@ export default function ToolsPage() {
       if (!res.ok) {
         throw new Error(payload.error ?? "删除失败");
       }
+      setConfigSource("manual");
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "删除失败");

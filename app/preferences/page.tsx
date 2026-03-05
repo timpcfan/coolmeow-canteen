@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiUrl } from "@/lib/client-api";
+import { setConfigSource } from "@/lib/config-source-client";
 import { getOnboardingStatus, resetOnboardingStatus, setOnboardingStatus } from "@/lib/onboarding-client";
 
 type Preference = {
@@ -86,6 +87,7 @@ export default function PreferencesPage() {
       if (!res.ok) {
         throw new Error(data.error ?? "保存失败");
       }
+      setConfigSource("manual");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存失败");

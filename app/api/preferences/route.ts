@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { getPreferences, updatePreferences } from "@/lib/repository";
+import { getPreferences, setPlanConfigSource, updatePreferences } from "@/lib/repository";
 
 const preferenceSchema = z.object({
   householdSize: z.number().int().min(1).max(12),
@@ -33,7 +33,8 @@ export async function PUT(req: NextRequest) {
     const body = await req.json();
     const parsed = preferenceSchema.parse(body);
     const item = await updatePreferences(parsed);
-    return NextResponse.json({ item });
+    const configSource = await setPlanConfigSource("manual", "偏好设置手动修改");
+    return NextResponse.json({ item, configSource });
   } catch (error) {
     return NextResponse.json(
       {
