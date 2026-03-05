@@ -98,7 +98,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_meal_plans_date_meal_type_unique
 CREATE INDEX IF NOT EXISTS idx_inventory_ingredient_location_expires
   ON inventory(ingredient_id, location, expires_at);
 
--- 6) app_state 可用性索引（已有主键 key，这里保留更新时间索引）
+-- 6) app_state 兼容兜底（老库可能缺失该表）
+CREATE TABLE IF NOT EXISTS app_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT ''
+);
+
 CREATE INDEX IF NOT EXISTS idx_app_state_updated_at ON app_state(updated_at);
 
 COMMIT;
