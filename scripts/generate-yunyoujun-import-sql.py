@@ -135,8 +135,9 @@ for idx, r in enumerate(rows, start=1):
     cook = 10 if difficulty in ['简单', ''] else 18 if difficulty in ['普通', '中等'] else 28
 
     desc = f"来源: YunYouJun/cook; bv: {bv}" if bv else '来源: YunYouJun/cook'
+    external_url = f"https://www.bilibili.com/video/{bv}" if bv else "https://github.com/YunYouJun/cook"
 
-    sql.append(f"INSERT INTO recipes(name,type,servings,cooking_methods,flavor_tags,is_low_cal,allergens,description,status,source_id,source_recipe_id,external_url,import_batch_id,created_at,updated_at) VALUES({q(final_name)},{q(rtype)},2,{q(json.dumps(methods if methods else [primary_method], ensure_ascii=False))},{q(json.dumps(tags, ensure_ascii=False))},0,{q(json.dumps(allergens, ensure_ascii=False))},{q(desc)},'active',(SELECT id FROM recipe_sources WHERE key='yunyoujun/cook'),{q(str(idx))},'https://github.com/YunYouJun/cook',(SELECT CAST(v AS INTEGER) FROM _import_meta WHERE k='batch_id'),datetime('now'),datetime('now'));")
+    sql.append(f"INSERT INTO recipes(name,type,servings,cooking_methods,flavor_tags,is_low_cal,allergens,description,status,source_id,source_recipe_id,external_url,import_batch_id,created_at,updated_at) VALUES({q(final_name)},{q(rtype)},2,{q(json.dumps(methods if methods else [primary_method], ensure_ascii=False))},{q(json.dumps(tags, ensure_ascii=False))},0,{q(json.dumps(allergens, ensure_ascii=False))},{q(desc)},'active',(SELECT id FROM recipe_sources WHERE key='yunyoujun/cook'),{q(str(idx))},{q(external_url)},(SELECT CAST(v AS INTEGER) FROM _import_meta WHERE k='batch_id'),datetime('now'),datetime('now'));")
 
     sql.append(f"DELETE FROM recipe_ingredients WHERE recipe_id=(SELECT id FROM recipes WHERE name={q(final_name)});")
     sql.append(f"DELETE FROM recipe_steps WHERE recipe_id=(SELECT id FROM recipes WHERE name={q(final_name)});")
