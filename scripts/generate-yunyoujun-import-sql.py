@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime
 
-ROOT = Path('/Users/timpcfan/workspace/lengmiao-canteen')
+ROOT = Path('/Users/timpcfan/workspace/coolmeow-canteen')
 SRC_CSV = ROOT / 'tmp/yunyoujun-cook-src/app/data/recipe.csv'
 DB_PATH = ROOT / 'db/sqlite.db'
 OUT_SQL = ROOT / 'db/imports/2026-03-05__import_yunyoujun_cook.sql'

@@ -2,5 +2,5 @@
   "source_rows": 599,
   "generated_recipes": 599,
   "renamed_due_to_name_conflict": 9,
-  "sql_file": "/Users/timpcfan/workspace/lengmiao-canteen/db/imports/2026-03-05__import_yunyoujun_cook.sql"
+  "sql_file": "/Users/timpcfan/workspace/coolmeow-canteen/db/imports/2026-03-05__import_yunyoujun_cook.sql"
 }

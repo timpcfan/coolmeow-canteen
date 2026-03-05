@@ -1,4 +1,4 @@
-const CACHE_NAME = "lengmiao-canteen-v1";
+const CACHE_NAME = "coolmeow-canteen-v1";
 const STATIC_ASSETS = [
   "/",
   "/week-plan",

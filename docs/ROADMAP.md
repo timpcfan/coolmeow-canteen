@@ -1,4 +1,4 @@
-# 冷喵食堂 Roadmap
+# 冷喵食堂（CoolMeow Canteen）Roadmap
 
 ## V2（智能化增强）
 

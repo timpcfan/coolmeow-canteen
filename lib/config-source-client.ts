@@ -1,6 +1,6 @@
 export type ConfigSource = "onboarding" | "quick_tune" | "manual";
 
-export const CONFIG_SOURCE_KEY = "lengmiao-config-source-v1";
+export const CONFIG_SOURCE_KEY = "coolmeow-config-source-v1";
 export const CONFIG_SOURCE_LABELS: Record<ConfigSource, string> = {
   onboarding: "引导",
   quick_tune: "快捷调优",

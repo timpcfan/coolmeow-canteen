@@ -1,4 +1,4 @@
-export const ONBOARDING_STATUS_KEY = "lengmiao-onboarding-v1_1";
+export const ONBOARDING_STATUS_KEY = "coolmeow-onboarding-v1_1";
 
 export type OnboardingStatus = "completed" | "skipped" | null;
 
