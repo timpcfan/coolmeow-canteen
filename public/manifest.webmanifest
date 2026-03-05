@@ -1,0 +1,24 @@
+{
+  "name": "冷喵食堂",
+  "short_name": "冷喵食堂",
+  "description": "帮助家庭用户高效、节约地做饭",
+  "start_url": "/week-plan",
+  "display": "standalone",
+  "background_color": "#f5f4ed",
+  "theme_color": "#295c4f",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at top, #fef7e2, #f5f4ed 55%);
+  color: #17352e;
+  font-family: "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
